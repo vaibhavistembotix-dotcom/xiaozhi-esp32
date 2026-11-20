@@ -1,0 +1,38 @@
+name: My Xiaozhi Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      board:
+        description: "Board folder (main/boards ke andar ka naam)"
+        default: "bread-compact-wifi"
+      language:
+        description: "Firmware language"
+        default: "en-US"
+      wake_word:
+        description: "Wake word (disabled / hiesp / nihaoxiaozhi)"
+        default: "disabled"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:release-v6.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build firmware
+        shell: bash
+        run: |
+          git config --global --add safe.directory '*'
+          . $IDF_PATH/export.sh
+          python scripts/build.py ${{ github.event.inputs.board }} \
+            --language ${{ github.event.inputs.language }} \
+            --wake-word ${{ github.event.inputs.wake_word }}
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaozhi-${{ github.event.inputs.board }}
+          path: build/merged-binary.bin
