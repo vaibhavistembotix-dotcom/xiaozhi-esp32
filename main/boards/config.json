@@ -1,9 +1,0 @@
-{
-    "type": "stembotix-playmate",
-    "target": "esp32",
-    "builds": [
-        {
-            "name": "stembotix-playmate"
-        }
-    ]
-}
