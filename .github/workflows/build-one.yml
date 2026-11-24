@@ -1,0 +1,121 @@
+name: Build One Board
+
+on:
+  workflow_dispatch:
+    inputs:
+      board:
+        description: "Board folder under main/boards (e.g. bread-compact-esp32)"
+        default: "bread-compact-esp32"
+      name:
+        description: "Variant name from that board's config.json (e.g. bread-compact-esp32)"
+        default: "bread-compact-esp32"
+      title:
+        description: "Label shown in the build history"
+        default: "Bread Compact ESP32 DevKit"
+      language:
+        description: "Firmware language"
+        default: "en-US"
+      wake_word:
+        description: "Wake word (disabled / hiesp / nihaoxiaozhi)"
+        default: "disabled"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:release-v6.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build
+        shell: bash
+        env:
+          BOARD: ${{ github.event.inputs.board }}
+          NAME: ${{ github.event.inputs.name }}
+          LANGUAGE: ${{ github.event.inputs.language }}
+          WAKE: ${{ github.event.inputs.wake_word }}
+        run: |
+          git config --global --add safe.directory '*'
+          . $IDF_PATH/export.sh
+          python scripts/build.py "$BOARD" --name "$NAME" --language "$LANGUAGE" --wake-word "$WAKE"
+
+      - name: Record version
+        shell: bash
+        run: |
+          python3 - <<'EOF'
+          import re, json
+          ver = "unknown"
+          try:
+              m = re.search(r'set\(PROJECT_VER\s+"([^"]+)"', open("CMakeLists.txt", encoding="utf-8").read())
+              if m: ver = m.group(1)
+          except Exception:
+              pass
+          json.dump({"version": ver}, open("build/meta.json", "w"))
+          EOF
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            build/merged-binary.bin
+            build/meta.json
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: dl
+
+      - name: Publish to gh-pages
+        shell: bash
+        env:
+          BOARD: ${{ github.event.inputs.board }}
+          NAME: ${{ github.event.inputs.name }}
+          TITLE: ${{ github.event.inputs.title }}
+          LANGUAGE: ${{ github.event.inputs.language }}
+          WAKE: ${{ github.event.inputs.wake_word }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ github.token }}
+        run: |
+          URL="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+          git clone --depth 1 --branch gh-pages "$URL" site 2>/dev/null || {
+            mkdir site && cd site && git init -q -b gh-pages && git remote add origin "$URL" && cd ..
+          }
+          mkdir -p "site/builds/${RUN_ID}"
+          cp dl/merged-binary.bin "site/builds/${RUN_ID}/merged-binary.bin"
+          touch site/.nojekyll
+          python3 - <<'EOF'
+          import json, os, time
+          meta = json.load(open("dl/meta.json"))
+          path = "site/builds.json"
+          data = json.load(open(path)) if os.path.exists(path) else []
+          rid = os.environ["RUN_ID"]
+          data.insert(0, {
+              "id": rid,
+              "board": os.environ["TITLE"],
+              "boardId": os.environ["NAME"],
+              "chip": "",
+              "version": meta["version"],
+              "commit": os.environ["SHA"][:12],
+              "lang": os.environ["LANGUAGE"],
+              "wake": os.environ["WAKE"],
+              "bin": "builds/" + rid + "/merged-binary.bin",
+              "at": int(time.time() * 1000),
+          })
+          json.dump(data, open(path, "w"), indent=2)
+          EOF
+          cd site
+          git config user.name "build-bot"
+          git config user.email "build-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Add build ${RUN_ID}"
+          git push origin gh-pages
