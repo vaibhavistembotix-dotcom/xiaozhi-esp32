@@ -163,7 +163,13 @@ choice BOARD_TYPE
     config BOARD_TYPE_BREAD_COMPACT_ESP32
         bool "Bread Compact ESP32 DevKit (面包板)"
         depends on IDF_TARGET_ESP32
-    config BOARD_TYPE_BREAD_COMPACT_ESP32_LCD
+      config BOARD_TYPE_STEMBOTIX_PLAYMATE
+        bool "Stembotix Playmate (ESP32)"
+        depends on IDF_TARGET_ESP32
+    config BOARD_TYPE_STEMBOTIX_C3_MINI
+        bool "Stembotix C3 Mini (ESP32-C3)"
+        depends on IDF_TARGET_ESP32C3
+config BOARD_TYPE_BREAD_COMPACT_ESP32_LCD
         bool "Bread Compact ESP32 DevKit + LCD (面包板)"
         depends on IDF_TARGET_ESP32
     config BOARD_TYPE_BREAD_COMPACT_ML307
