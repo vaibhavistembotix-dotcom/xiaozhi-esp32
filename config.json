@@ -1,12 +1,9 @@
 {
-    "type": "stembotix-c3-mini",
-    "target": "esp32c3",
+    "type": "stembotix-playmate",
+    "target": "esp32",
     "builds": [
         {
-            "name": "stembotix-c3-mini",
-            "sdkconfig_append": [
-                "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y"
-            ]
+            "name": "stembotix-playmate"
         }
     ]
 }
