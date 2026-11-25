@@ -6,6 +6,7 @@
 #include "config.h"
 
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <driver/gpio.h>
 #include <driver/i2c_master.h>
 #include <esp_lcd_panel_ops.h>
@@ -14,6 +15,35 @@
 #include <freertos/task.h>
 
 #define TAG "StembotixC3Mini"
+
+// DEBUG: mic level har 1 second serial par print karta hai
+class DebugDuplexCodec : public NoAudioCodecDuplex {
+public:
+    using NoAudioCodecDuplex::NoAudioCodecDuplex;
+protected:
+    int Read(int16_t* dest, int samples) override {
+        int n = NoAudioCodecDuplex::Read(dest, samples);
+        static int64_t last_log = 0;
+        static int peak = 0;
+        static int64_t sum = 0;
+        static int cnt = 0;
+        for (int i = 0; i < n; i++) {
+            int v = dest[i] < 0 ? -dest[i] : dest[i];
+            if (v > peak) peak = v;
+            sum += v;
+            cnt++;
+        }
+        int64_t now = esp_timer_get_time();
+        if (now - last_log > 1000000) {
+            ESP_LOGI("MICDEBUG", "mic peak=%d avg=%d samples=%d", peak, cnt ? (int)(sum / cnt) : 0, cnt);
+            last_log = now;
+            peak = 0;
+            sum = 0;
+            cnt = 0;
+        }
+        return n;
+    }
+};
 
 class StembotixC3MiniBoard : public WifiBoard {
 private:
@@ -118,7 +148,7 @@ public:
     }
 
     virtual AudioCodec* GetAudioCodec() override {
-        static NoAudioCodecDuplex audio_codec(AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
+        static DebugDuplexCodec audio_codec(AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
             AUDIO_I2S_GPIO_BCLK, AUDIO_I2S_GPIO_WS, AUDIO_I2S_GPIO_DOUT, AUDIO_I2S_GPIO_DIN);
         return &audio_codec;
     }
